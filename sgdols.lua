@@ -39,17 +39,11 @@ function optim.sgdols(opfunc, x, config, state)
    local nevals = state.evalCounter
    local p = state.numParameters
    
-   -- Change defaul tensor for easy initialization
-   torch.setdefaulttensortype('torch.FloatTensor')
-   
-   state.P = state.P or torch.eye( p + 1 ):cuda()
-   state.B = state.B or torch.Tensor( p + 1 , p ):zero():cuda()
-   state.G = state.G or torch.eye( p ):cuda()
-   state.Gt = state.Gt or torch.eye( p ):cuda()
+   state.P = state.P or torch.eye( p + 1 )
+   state.B = state.B or torch.Tensor( p + 1 , p ):zero()
+   state.G = state.G or torch.eye( p )
+   state.Gt = state.Gt or torch.eye( p )
    state.parametersSlow = state.parametersSlow or x:clone()
-   
-   -- Return to CUDA tensor type
-   torch.setdefaulttensortype('torch.CudaTensor')
    
    local P = state.P
    local B = state.B
@@ -74,16 +68,11 @@ function optim.sgdols(opfunc, x, config, state)
    xRest = state.parametersSlow
    xOne[ p + 1 ] = 1.0
    
-   -- (6) parameter update
-   if state.evalCounter > state.sgdSteps then
-     state.parametersSlow:addmv( -clr/2.0 , G , y )
-     state.parametersSlow:addmv( -clr/2.0 , Gt , y )
-   else
-     state.parametersSlow:add( -clr , y )
-   end
-     
-   x:mul( (sgdolsState.evalCounter -1)/sgdolsState.evalCounter )
-   x:add( sgdolsState.evalCounter , state.parametersSlow )
+   state.parametersSlow:addmv( -clr/2.0 , G , y )
+   state.parametersSlow:addmv( -clr/2.0 , Gt , y )
+   
+   x:mul( (state.evalCounter -1)/state.evalCounter )
+   x:add( state.evalCounter , state.parametersSlow )
    
    -- (7) rank one update of matrices
    uno = 1.0
