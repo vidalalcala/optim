@@ -39,10 +39,22 @@ function optim.sgdols(opfunc, x, config, state)
    local nevals = state.evalCounter
    local p = state.numParameters
    
-   state.P = state.P or torch.eye( p + 1 )
-   state.B = state.B or torch.Tensor( p + 1 , p ):zero()
-   state.G = state.G or torch.eye( p )
-   state.Gt = state.Gt or torch.eye( p )
+   if torch.getdefaulttensortype() == 'torch.CudaTensor' then
+      torch.setdefaulttensortype('torch.FloatTensor')
+      
+      state.P = torch.eye(p + 1):cuda()
+      state.B = torch.Tensor(p + 1, p):zero():cuda()
+      state.G = torch.eye(p):cuda()
+      state.Gt = torch.eye(p):cuda()
+   
+      torch.setdefaulttensortype('torch.CudaTensor') 
+   else
+      state.P = state.P or torch.eye(p + 1)
+      state.B = state.B or torch.Tensor(p + 1, p):zero()
+      state.G = state.G or torch.eye(p)
+      state.Gt = state.Gt or torch.eye(p) 
+   end
+   
    state.parametersSlow = state.parametersSlow or x:clone()
    
    local P = state.P
@@ -61,12 +73,12 @@ function optim.sgdols(opfunc, x, config, state)
    
    
    -- (5) save old parameter
-   local xOne = torch.Tensor( p + 1 )
+   local xOne = torch.Tensor(p + 1)
    local xRest = xOne:narrow(1, 1, p)
-   local y = torch.Tensor( p )
+   local y = torch.Tensor(p)
    y = dfdx
    xRest = state.parametersSlow
-   xOne[ p + 1 ] = 1.0
+   xOne[p + 1] = 1.0
    
    state.parametersSlow:addmv( -clr/2.0 , G , y )
    state.parametersSlow:addmv( -clr/2.0 , Gt , y )
@@ -76,31 +88,31 @@ function optim.sgdols(opfunc, x, config, state)
    
    -- (7) rank one update of matrices
    uno = 1.0
-   local Px = torch.Tensor( p + 1 )
+   local Px = torch.Tensor(p + 1)
    Px:zero()
    Px:addmv(P ,xOne)
    b = uno + xOne:dot(Px)
    alpha = uno/b
-   local u = torch.Tensor( p + 1 , 1 )
-   u = Px:narrow( 1 , 1 , p )
+   local u = torch.Tensor(p + 1, 1)
+   u = Px:narrow(1, 1, p)
    u:mul(alpha)
-   local v = torch.Tensor( 1 , x:size(1) )
+   local v = torch.Tensor(1, x:size(1))
    v = y
-   v:addmv( - 1.0 , B:t(), xOne )
-   state.B:addr( alpha , Px , v )
-   state.P:addr( -alpha , Px , Px )
+   v:addmv(- 1.0, B:t(), xOne )
+   state.B:addr(alpha, Px, v)
+   state.P:addr(-alpha, Px, Px)
    
-   local Gu = torch.Tensor( p )
+   local Gu = torch.Tensor(p)
    Gu:zero()
-   Gu:addmv( G , u )
-   local Gv = torch.Tensor( p )
+   Gu:addmv(G, u)
+   local Gv = torch.Tensor(p)
    Gv:zero()
-   Gv:addmv( G:t() , v )
-   b = uno + v:dot( Gu )
+   Gv:addmv(G:t(), v)
+   b = uno + v:dot(Gu)
    beta =  uno/b
    
-   state.G:addr( -beta , Gu , Gv )
-   state.Gt:addr( -beta , Gv , Gu )
+   state.G:addr(-beta, Gu, Gv )
+   state.Gt:addr(-beta, Gv, Gu )
    
    -- return x*, f(x) before optimization
    return x,{fx}
