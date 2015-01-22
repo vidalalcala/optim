@@ -42,10 +42,10 @@ function optim.sgdols(opfunc, x, config, state)
    if torch.getdefaulttensortype() == 'torch.CudaTensor' then
       torch.setdefaulttensortype('torch.FloatTensor')
       
-      state.P = torch.eye(p + 1):cuda()
-      state.B = torch.Tensor(p + 1, p):zero():cuda()
-      state.G = torch.eye(p):cuda()
-      state.Gt = torch.eye(p):cuda()
+      state.P = state.P or torch.eye(p + 1):cuda()
+      state.B = state.B or torch.Tensor(p + 1, p):zero():cuda()
+      state.G = state.G or torch.eye(p):cuda()
+      state.Gt = state.Gt or torch.eye(p):cuda()
    
       torch.setdefaulttensortype('torch.CudaTensor') 
    else
@@ -76,8 +76,8 @@ function optim.sgdols(opfunc, x, config, state)
    local xOne = torch.Tensor(p + 1)
    local xRest = xOne:narrow(1, 1, p)
    local y = torch.Tensor(p)
-   y = dfdx
-   xRest = state.parametersSlow
+   y[{}] = dfdx
+   xRest[{}] = state.parametersSlow
    xOne[p + 1] = 1.0
    
    state.parametersSlow:addmv( -clr/2.0 , G , y )
@@ -87,17 +87,17 @@ function optim.sgdols(opfunc, x, config, state)
    x:add( state.evalCounter , state.parametersSlow )
    
    -- (7) rank one update of matrices
-   uno = 1.0
    local Px = torch.Tensor(p + 1)
    Px:zero()
    Px:addmv(P ,xOne)
-   b = uno + xOne:dot(Px)
-   alpha = uno/b
+   local a = xOne:dot(Px)
+   a = a + 1.0
+   local alpha = 1.0/a
    local u = torch.Tensor(p + 1, 1)
    u = Px:narrow(1, 1, p)
    u:mul(alpha)
-   local v = torch.Tensor(1, x:size(1))
-   v = y
+   local v = torch.Tensor(p)
+   v[{}] = y
    v:addmv(- 1.0, B:t(), xOne )
    state.B:addr(alpha, Px, v)
    state.P:addr(-alpha, Px, Px)
@@ -108,8 +108,9 @@ function optim.sgdols(opfunc, x, config, state)
    local Gv = torch.Tensor(p)
    Gv:zero()
    Gv:addmv(G:t(), v)
-   b = uno + v:dot(Gu)
-   beta =  uno/b
+   local b = v:dot(Gu)
+   b = b + 1.0
+   local beta =  1.0/b
    
    state.G:addr(-beta, Gu, Gv )
    state.Gt:addr(-beta, Gv, Gu )
